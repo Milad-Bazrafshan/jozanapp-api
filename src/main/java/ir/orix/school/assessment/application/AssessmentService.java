@@ -1,34 +1,352 @@
 package ir.orix.school.assessment.application;
 
-import java.math.BigDecimal; import java.time.*; import java.util.*; import java.util.function.Supplier; import java.util.stream.Collectors;
-import com.fasterxml.jackson.core.type.TypeReference; import com.fasterxml.jackson.databind.ObjectMapper; import org.springframework.http.HttpStatus; import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional;
-import ir.orix.school.academic.domain.Course; import ir.orix.school.academic.persistence.CourseRepository; import ir.orix.school.assessment.domain.*; import ir.orix.school.assessment.persistence.*; import ir.orix.school.audit.application.AuditService; import ir.orix.school.classroom.domain.*; import ir.orix.school.classroom.persistence.*; import ir.orix.school.enrollment.domain.Enrollment; import ir.orix.school.enrollment.persistence.EnrollmentRepository; import ir.orix.school.identity.domain.UserAccount; import ir.orix.school.identity.persistence.UserAccountRepository; import ir.orix.school.organization.domain.*; import ir.orix.school.organization.persistence.*; import ir.orix.school.people.domain.*; import ir.orix.school.people.persistence.*; import ir.orix.school.shared.security.ScopeAuthorizer; import ir.orix.school.shared.web.ApiException;
+import java.math.BigDecimal;
+import java.time.*;
+import java.util.*;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import ir.orix.school.academic.domain.Course;
+import ir.orix.school.academic.persistence.CourseRepository;
+import ir.orix.school.assessment.domain.*;
+import ir.orix.school.assessment.persistence.*;
+import ir.orix.school.audit.application.AuditService;
+import ir.orix.school.classroom.domain.*;
+import ir.orix.school.classroom.persistence.*;
+import ir.orix.school.enrollment.domain.Enrollment;
+import ir.orix.school.enrollment.persistence.EnrollmentRepository;
+import ir.orix.school.identity.domain.UserAccount;
+import ir.orix.school.identity.persistence.UserAccountRepository;
+import ir.orix.school.organization.domain.*;
+import ir.orix.school.organization.persistence.*;
+import ir.orix.school.people.domain.*;
+import ir.orix.school.people.persistence.*;
+import ir.orix.school.shared.security.ScopeAuthorizer;
+import ir.orix.school.shared.web.ApiException;
 
 @Service
 public class AssessmentService {
- private final TenantRepository tenants; private final TenantMembershipRepository memberships; private final CourseRepository courses; private final ClassSectionRepository classes; private final ClassInstructorRepository classInstructors; private final InstructorProfileRepository instructors; private final StudentProfileRepository students; private final EnrollmentRepository enrollments; private final UserAccountRepository accounts; private final QuestionRepository questions; private final QuestionVersionRepository versions; private final AssessmentRepository assessments; private final AssessmentSectionRepository sections; private final AssessmentQuestionRepository assessmentQuestions; private final AssessmentTargetRepository targets; private final AssessmentParticipantRepository participants; private final AssessmentAttemptRepository attempts; private final ScopeAuthorizer authorizer; private final AuditService audit; private final ObjectMapper json=new ObjectMapper(); private final Clock clock;
- public AssessmentService(TenantRepository tenants,TenantMembershipRepository memberships,CourseRepository courses,ClassSectionRepository classes,ClassInstructorRepository classInstructors,InstructorProfileRepository instructors,StudentProfileRepository students,EnrollmentRepository enrollments,UserAccountRepository accounts,QuestionRepository questions,QuestionVersionRepository versions,AssessmentRepository assessments,AssessmentSectionRepository sections,AssessmentQuestionRepository assessmentQuestions,AssessmentTargetRepository targets,AssessmentParticipantRepository participants,AssessmentAttemptRepository attempts,ScopeAuthorizer authorizer,AuditService audit,Clock clock){this.tenants=tenants;this.memberships=memberships;this.courses=courses;this.classes=classes;this.classInstructors=classInstructors;this.instructors=instructors;this.students=students;this.enrollments=enrollments;this.accounts=accounts;this.questions=questions;this.versions=versions;this.assessments=assessments;this.sections=sections;this.assessmentQuestions=assessmentQuestions;this.targets=targets;this.participants=participants;this.attempts=attempts;this.authorizer=authorizer;this.audit=audit;this.clock=clock;}
+    private final TenantRepository tenants;
+    private final TenantMembershipRepository memberships;
+    private final CourseRepository courses;
+    private final ClassSectionRepository classes;
+    private final ClassInstructorRepository classInstructors;
+    private final InstructorProfileRepository instructors;
+    private final StudentProfileRepository students;
+    private final EnrollmentRepository enrollments;
+    private final UserAccountRepository accounts;
+    private final QuestionRepository questions;
+    private final QuestionVersionRepository versions;
+    private final AssessmentRepository assessments;
+    private final AssessmentSectionRepository sections;
+    private final AssessmentQuestionRepository assessmentQuestions;
+    private final AssessmentTargetRepository targets;
+    private final AssessmentParticipantRepository participants;
+    private final AssessmentAttemptRepository attempts;
+    private final ScopeAuthorizer authorizer;
+    private final AuditService audit;
+    private final ObjectMapper json = new ObjectMapper();
+    private final Clock clock;
 
- @Transactional(readOnly=true) public List<QuestionView> questions(Long tenantId){return questions.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().map(q->questionView(q,latest(q.getId()))).toList();}
- @Transactional(readOnly=true) public List<AssessmentView> assessments(Long tenantId,Long membershipId,Long accountId){return assessments.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(a->canManage(tenantId,membershipId,accountId,a,"ASSESSMENT_READ")).map(this::assessmentView).toList();}
- @Transactional public QuestionView createQuestion(Long tenantId,Long actorId,QuestionCommand c){validateQuestion(c.type(),c.options(),c.correctAnswers());if(questions.existsByTenantIdAndCodeIgnoreCase(tenantId,c.code()))throw conflict("QUESTION_CODE_EXISTS","Question code already exists.");Tenant tenant=tenant(tenantId);UserAccount actor=account(actorId);Course course=c.courseId()==null?null:courses.findByIdAndTenantId(c.courseId(),tenantId).orElseThrow(notFound("COURSE_NOT_FOUND"));Question question=questions.save(new Question(tenant,course,c.code(),c.type(),actor));QuestionVersion version=versions.save(new QuestionVersion(tenant,question,1,c.prompt(),write(c.options()),write(c.correctAnswers()),c.explanation(),c.defaultPoints(),actor));audit.record(tenantId,actorId,"QUESTION_CREATED","QUESTION",question.getId(),Map.of("version",1));return questionView(question,version);}
- @Transactional public QuestionView createVersion(Long tenantId,Long actorId,Long questionId,VersionCommand c){Question question=questions.findByIdAndTenantId(questionId,tenantId).orElseThrow(notFound("QUESTION_NOT_FOUND"));validateQuestion(question.getType(),c.options(),c.correctAnswers());QuestionVersion version=versions.save(new QuestionVersion(tenant(tenantId),question,question.nextVersion(),c.prompt(),write(c.options()),write(c.correctAnswers()),c.explanation(),c.defaultPoints(),account(actorId)));audit.record(tenantId,actorId,"QUESTION_VERSION_CREATED","QUESTION",questionId,Map.of("version",version.getVersionNumber()));return questionView(question,version);}
- @Transactional public AssessmentView createAssessment(Long tenantId,Long actorId,AssessmentCommand c){if(assessments.existsByTenantIdAndCodeIgnoreCase(tenantId,c.code()))throw conflict("ASSESSMENT_CODE_EXISTS","Assessment code already exists.");if(!c.closesAt().isAfter(c.opensAt()))throw invalid("INVALID_ASSESSMENT_WINDOW","Close time must be after open time.");if(Duration.between(c.opensAt(),c.closesAt()).toMinutes()<c.durationMinutes())throw invalid("DURATION_EXCEEDS_WINDOW","Duration cannot exceed the assessment window.");Course course=c.courseId()==null?null:courses.findByIdAndTenantId(c.courseId(),tenantId).orElseThrow(notFound("COURSE_NOT_FOUND"));Assessment value=assessments.save(new Assessment(tenant(tenantId),course,c.code(),c.title(),c.type(),c.opensAt(),c.closesAt(),c.durationMinutes(),c.attemptsAllowed(),c.randomizeQuestions(),c.priceRial(),account(actorId)));audit.record(tenantId,actorId,"ASSESSMENT_CREATED","ASSESSMENT",value.getId(),Map.of("code",value.getCode()));return assessmentView(value);}
- @Transactional public AssessmentView addSection(Long tenantId,Long actorId,Long assessmentId,SectionCommand c){Assessment assessment=draft(tenantId,assessmentId);if(sections.existsByAssessmentIdAndSequenceNumber(assessmentId,c.sequenceNumber()))throw conflict("SECTION_SEQUENCE_EXISTS","Section sequence already exists.");sections.save(new AssessmentSection(tenant(tenantId),assessment,c.title(),c.instructions(),c.sequenceNumber()));audit.record(tenantId,actorId,"ASSESSMENT_SECTION_ADDED","ASSESSMENT",assessmentId,Map.of());return assessmentView(assessment);}
- @Transactional public AssessmentView addQuestion(Long tenantId,Long actorId,Long assessmentId,AssessmentQuestionCommand c){Assessment assessment=draft(tenantId,assessmentId);AssessmentSection section=sections.findByIdAndTenantId(c.sectionId(),tenantId).orElseThrow(notFound("ASSESSMENT_SECTION_NOT_FOUND"));if(!section.getAssessment().getId().equals(assessmentId))throw invalid("SECTION_ASSESSMENT_MISMATCH","Section does not belong to this assessment.");QuestionVersion version=versions.findByIdAndTenantId(c.questionVersionId(),tenantId).orElseThrow(notFound("QUESTION_VERSION_NOT_FOUND"));if(assessmentQuestions.existsByAssessmentIdAndQuestionVersionId(assessmentId,version.getId()))throw conflict("QUESTION_ALREADY_ATTACHED","Question is already attached.");if(assessmentQuestions.existsBySectionIdAndSequenceNumber(section.getId(),c.sequenceNumber()))throw conflict("QUESTION_SEQUENCE_EXISTS","Question sequence already exists in this section.");assessmentQuestions.save(new AssessmentQuestion(tenant(tenantId),assessment,section,version,c.points(),c.sequenceNumber()));assessment.updateTotalPoints(assessmentQuestions.totalPoints(assessmentId));audit.record(tenantId,actorId,"ASSESSMENT_QUESTION_ADDED","ASSESSMENT",assessmentId,Map.of("questionVersionId",version.getId().toString()));return assessmentView(assessment);}
- @Transactional public AssessmentView addTarget(Long tenantId,Long membershipId,Long actorId,Long assessmentId,Long classSectionId){Assessment assessment=draft(tenantId,assessmentId);ClassSection section=classes.findByIdAndTenantId(classSectionId,tenantId).orElseThrow(notFound("CLASS_SECTION_NOT_FOUND"));ensureClassAccess(tenantId,membershipId,section,"ASSESSMENT_WRITE");if(targets.existsByAssessmentIdAndClassSectionId(assessmentId,classSectionId))throw conflict("ASSESSMENT_TARGET_EXISTS","Class is already targeted.");targets.save(new AssessmentTarget(tenant(tenantId),assessment,section));audit.record(tenantId,actorId,"ASSESSMENT_TARGET_ADDED","ASSESSMENT",assessmentId,Map.of("classSectionId",classSectionId.toString()));return assessmentView(assessment);}
- @Transactional public AssessmentView publish(Long tenantId,Long membershipId,Long actorId,Long assessmentId){Assessment assessment=draft(tenantId,assessmentId);List<AssessmentQuestion> items=assessmentQuestions.findAllByAssessmentIdOrderBySectionSequenceNumberAscSequenceNumberAsc(assessmentId);List<AssessmentTarget> targetList=targets.findAllByAssessmentId(assessmentId);if(items.isEmpty())throw conflict("ASSESSMENT_HAS_NO_QUESTIONS","Assessment must contain at least one question.");if(targetList.isEmpty())throw conflict("ASSESSMENT_HAS_NO_TARGETS","Assessment must target at least one class.");targetList.forEach(t->ensureClassAccess(tenantId,membershipId,t.getClassSection(),"ASSESSMENT_PUBLISH"));LinkedHashMap<Long,Enrollment> eligible=new LinkedHashMap<>();for(AssessmentTarget target:targetList)for(Enrollment enrollment:enrollments.findAllByTenantIdAndClassSectionIdOrderByStudentPersonLastNameAsc(tenantId,target.getClassSection().getId()))if(enrollment.getStatus()==Enrollment.Status.ACTIVE)eligible.putIfAbsent(enrollment.getStudent().getId(),enrollment);if(eligible.isEmpty())throw conflict("ASSESSMENT_HAS_NO_PARTICIPANTS","Target classes have no active students.");Tenant tenant=tenant(tenantId);eligible.values().forEach(e->{if(!participants.existsByAssessmentIdAndStudentId(assessmentId,e.getStudent().getId()))participants.save(new AssessmentParticipant(tenant,assessment,e));});assessment.updateTotalPoints(assessmentQuestions.totalPoints(assessmentId));assessment.publish(account(actorId),Instant.now(clock));audit.record(tenantId,actorId,"ASSESSMENT_PUBLISHED","ASSESSMENT",assessmentId,Map.of("participantCount",eligible.size(),"questionCount",items.size()));return assessmentView(assessment);}
- @Transactional(readOnly=true) public List<MyAssessmentView> mine(Long tenantId,Long membershipId){TenantMembership membership=memberships.findByIdAndTenantId(membershipId,tenantId).orElseThrow(notFound("MEMBERSHIP_NOT_FOUND"));StudentProfile student=students.findByTenantIdAndPersonId(tenantId,membership.getPerson().getId()).orElseThrow(notFound("STUDENT_PROFILE_NOT_FOUND"));return forStudent(tenantId,student.getId());}
- @Transactional(readOnly=true) public List<MyAssessmentView> forStudent(Long tenantId,Long studentId){students.findByIdAndTenantId(studentId,tenantId).orElseThrow(notFound("STUDENT_NOT_FOUND"));return participants.findAllByTenantIdAndStudentIdOrderByCreatedAtDesc(tenantId,studentId).stream().filter(p->p.getStatus()==AssessmentParticipant.Status.ELIGIBLE).map(p->{Assessment a=p.getAssessment();long used=attempts.countByParticipantId(p.getId());int remaining=Math.max(0,a.getAttemptsAllowed()-(int)used);return new MyAssessmentView(a.getId(),a.getCode(),a.getTitle(),a.getType().name(),a.getStatus().name(),a.getOpensAt(),a.getClosesAt(),a.getDurationMinutes(),a.getTotalPoints(),a.getAttemptsAllowed(),(int)used,remaining,a.getPriceRial(),p.isFeePaid(a.getPriceRial()));}).toList();}
+    public AssessmentService(TenantRepository tenants, TenantMembershipRepository memberships, CourseRepository courses, ClassSectionRepository classes, ClassInstructorRepository classInstructors, InstructorProfileRepository instructors, StudentProfileRepository students, EnrollmentRepository enrollments, UserAccountRepository accounts, QuestionRepository questions, QuestionVersionRepository versions, AssessmentRepository assessments, AssessmentSectionRepository sections, AssessmentQuestionRepository assessmentQuestions, AssessmentTargetRepository targets, AssessmentParticipantRepository participants, AssessmentAttemptRepository attempts, ScopeAuthorizer authorizer, AuditService audit, Clock clock) {
+        this.tenants = tenants;
+        this.memberships = memberships;
+        this.courses = courses;
+        this.classes = classes;
+        this.classInstructors = classInstructors;
+        this.instructors = instructors;
+        this.students = students;
+        this.enrollments = enrollments;
+        this.accounts = accounts;
+        this.questions = questions;
+        this.versions = versions;
+        this.assessments = assessments;
+        this.sections = sections;
+        this.assessmentQuestions = assessmentQuestions;
+        this.targets = targets;
+        this.participants = participants;
+        this.attempts = attempts;
+        this.authorizer = authorizer;
+        this.audit = audit;
+        this.clock = clock;
+    }
 
- private boolean canManage(Long tenantId,Long membershipId,Long accountId,Assessment assessment,String permission){if(authorizer.isTenantAdmin())return true;if(assessment.getCreatedBy()!=null&&assessment.getCreatedBy().getId().equals(accountId))return true;TenantMembership membership=memberships.findByIdAndTenantId(membershipId,tenantId).orElseThrow(notFound("MEMBERSHIP_NOT_FOUND"));Optional<InstructorProfile> instructor=instructors.findByTenantIdAndPersonId(tenantId,membership.getPerson().getId());List<AssessmentTarget> values=targets.findAllByAssessmentId(assessment.getId());if(instructor.isPresent())return values.stream().anyMatch(t->classInstructors.existsByClassSectionIdAndInstructorIdAndStatus(t.getClassSection().getId(),instructor.get().getId(),ClassInstructor.Status.ACTIVE));return values.stream().anyMatch(t->authorizer.hasPermissionForBranch(permission,t.getClassSection().getOffering().getBranch().getId()));}
- private void ensureClassAccess(Long tenantId,Long membershipId,ClassSection section,String permission){if(authorizer.isTenantAdmin())return;TenantMembership membership=memberships.findByIdAndTenantId(membershipId,tenantId).orElseThrow(notFound("MEMBERSHIP_NOT_FOUND"));Optional<InstructorProfile> instructor=instructors.findByTenantIdAndPersonId(tenantId,membership.getPerson().getId());boolean allowed=instructor.isPresent()?classInstructors.existsByClassSectionIdAndInstructorIdAndStatus(section.getId(),instructor.get().getId(),ClassInstructor.Status.ACTIVE):authorizer.hasPermissionForBranch(permission,section.getOffering().getBranch().getId());if(!allowed)throw new ApiException(HttpStatus.FORBIDDEN,"ASSESSMENT_CLASS_ACCESS_DENIED","You are not authorized for this class.");}
- private Assessment draft(Long tenantId,Long id){Assessment value=assessments.findByIdAndTenantId(id,tenantId).orElseThrow(notFound("ASSESSMENT_NOT_FOUND"));if(value.getStatus()!=Assessment.Status.DRAFT)throw conflict("ASSESSMENT_NOT_EDITABLE","Published assessments cannot be edited.");return value;}
- private void validateQuestion(Question.Type type,List<String> options,List<String> answers){List<String> opts=options==null?List.of():options.stream().filter(v->v!=null&&!v.isBlank()).map(String::strip).toList();List<String> keys=answers==null?List.of():answers.stream().filter(v->v!=null&&!v.isBlank()).map(String::strip).toList();if(Set.of(Question.Type.SINGLE_CHOICE,Question.Type.MULTIPLE_CHOICE).contains(type)){if(opts.size()<2)throw invalid("QUESTION_OPTIONS_REQUIRED","Choice questions require at least two options.");if(keys.isEmpty()||!opts.containsAll(keys))throw invalid("INVALID_ANSWER_KEY","Correct answers must belong to the options.");if(type==Question.Type.SINGLE_CHOICE&&keys.size()!=1)throw invalid("SINGLE_ANSWER_REQUIRED","Single-choice questions require one correct answer.");}if(type==Question.Type.TRUE_FALSE&&(keys.size()!=1||!Set.of("TRUE","FALSE").contains(keys.get(0).toUpperCase())))throw invalid("TRUE_FALSE_ANSWER_REQUIRED","True/false questions require TRUE or FALSE as answer.");}
- private QuestionVersion latest(Long questionId){return versions.findFirstByQuestionIdOrderByVersionNumberDesc(questionId).orElseThrow(notFound("QUESTION_VERSION_NOT_FOUND"));} private String write(List<String> value){try{return value==null?"[]":json.writeValueAsString(value);}catch(Exception e){throw invalid("INVALID_QUESTION_CONTENT","Question content could not be serialized.");}} private List<String> read(String value){try{return value==null?List.of():json.readValue(value,new TypeReference<>(){});}catch(Exception e){return List.of();}}
- private QuestionView questionView(Question q,QuestionVersion v){return new QuestionView(q.getId(),q.getCode(),q.getType().name(),q.getCourse()==null?null:q.getCourse().getId(),q.getCourse()==null?null:q.getCourse().getTitle(),q.getStatus().name(),v.getId(),v.getVersionNumber(),v.getPrompt(),read(v.getOptionsJson()),read(v.getAnswerKeyJson()),v.getExplanation(),v.getDefaultPoints());}
- private AssessmentView assessmentView(Assessment a){List<SectionView> sectionViews=sections.findAllByAssessmentIdOrderBySequenceNumber(a.getId()).stream().map(s->new SectionView(s.getId(),s.getTitle(),s.getInstructions(),s.getSequenceNumber())).toList();List<AssessmentQuestionView> questionViews=assessmentQuestions.findAllByAssessmentIdOrderBySectionSequenceNumberAscSequenceNumberAsc(a.getId()).stream().map(q->new AssessmentQuestionView(q.getId(),q.getSection().getId(),q.getQuestionVersion().getId(),q.getQuestionVersion().getQuestion().getCode(),q.getQuestionVersion().getPrompt(),q.getPoints(),q.getSequenceNumber())).toList();List<TargetView> targetViews=targets.findAllByAssessmentId(a.getId()).stream().map(t->new TargetView(t.getId(),t.getClassSection().getId(),t.getClassSection().getName(),t.getClassSection().getOffering().getBranch().getName())).toList();return new AssessmentView(a.getId(),a.getCode(),a.getTitle(),a.getType().name(),a.getStatus().name(),a.getCourse()==null?null:a.getCourse().getId(),a.getCourse()==null?null:a.getCourse().getTitle(),a.getOpensAt(),a.getClosesAt(),a.getDurationMinutes(),a.getAttemptsAllowed(),a.isRandomizeQuestions(),a.getPriceRial(),a.getTotalPoints(),a.getPublishedAt(),participants.countByAssessmentId(a.getId()),sectionViews,questionViews,targetViews);}
- private Tenant tenant(Long id){return tenants.findById(id).orElseThrow(notFound("TENANT_NOT_FOUND"));} private UserAccount account(Long id){return accounts.findById(id).orElseThrow(notFound("ACTOR_NOT_FOUND"));} private static Supplier<ApiException> notFound(String code){return ()->new ApiException(HttpStatus.NOT_FOUND,code,"The requested assessment item was not found.");} private static ApiException invalid(String code,String detail){return new ApiException(HttpStatus.BAD_REQUEST,code,detail);} private static ApiException conflict(String code,String detail){return new ApiException(HttpStatus.CONFLICT,code,detail);}
- public record QuestionCommand(Long courseId,String code,Question.Type type,String prompt,List<String> options,List<String> correctAnswers,String explanation,BigDecimal defaultPoints){} public record VersionCommand(String prompt,List<String> options,List<String> correctAnswers,String explanation,BigDecimal defaultPoints){} public record AssessmentCommand(Long courseId,String code,String title,Assessment.Type type,Instant opensAt,Instant closesAt,int durationMinutes,int attemptsAllowed,boolean randomizeQuestions,long priceRial){} public record SectionCommand(String title,String instructions,int sequenceNumber){} public record AssessmentQuestionCommand(Long sectionId,Long questionVersionId,BigDecimal points,int sequenceNumber){}
- public record QuestionView(Long id,String code,String type,Long courseId,String courseTitle,String status,Long currentVersionId,int versionNumber,String prompt,List<String> options,List<String> correctAnswers,String explanation,BigDecimal defaultPoints){} public record SectionView(Long id,String title,String instructions,int sequenceNumber){} public record AssessmentQuestionView(Long id,Long sectionId,Long questionVersionId,String questionCode,String prompt,BigDecimal points,int sequenceNumber){} public record TargetView(Long id,Long classSectionId,String className,String branchName){} public record AssessmentView(Long id,String code,String title,String type,String status,Long courseId,String courseTitle,Instant opensAt,Instant closesAt,int durationMinutes,int attemptsAllowed,boolean randomizeQuestions,long priceRial,BigDecimal totalPoints,Instant publishedAt,long participantCount,List<SectionView> sections,List<AssessmentQuestionView> questions,List<TargetView> targets){} public record MyAssessmentView(Long id,String code,String title,String type,String status,Instant opensAt,Instant closesAt,int durationMinutes,BigDecimal totalPoints,int attemptsAllowed,int attemptsUsed,int attemptsRemaining,long priceRial,boolean feePaid){}
+    @Transactional(readOnly = true)
+    public List<QuestionView> questions(Long tenantId) {
+        return questions.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().map(q -> questionView(q, latest(q.getId()))).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssessmentView> assessments(Long tenantId, Long membershipId, Long accountId) {
+        return assessments.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(a -> canManage(tenantId, membershipId, accountId, a, "ASSESSMENT_READ")).map(this::assessmentView).toList();
+    }
+
+    @Transactional
+    public QuestionView createQuestion(Long tenantId, Long actorId, QuestionCommand c) {
+        validateQuestion(c.type(), c.options(), c.correctAnswers());
+        if (questions.existsByTenantIdAndCodeIgnoreCase(tenantId, c.code()))
+            throw conflict("QUESTION_CODE_EXISTS", "Question code already exists.");
+        Tenant tenant = tenant(tenantId);
+        UserAccount actor = account(actorId);
+        Course course = c.courseId() == null ? null : courses.findByIdAndTenantId(c.courseId(), tenantId).orElseThrow(notFound("COURSE_NOT_FOUND"));
+        Question question = questions.save(new Question(tenant, course, c.code(), c.type(), actor));
+        QuestionVersion version = versions.save(new QuestionVersion(tenant, question, 1, c.prompt(), write(c.options()), write(c.correctAnswers()), c.explanation(), c.defaultPoints(), actor));
+        audit.record(tenantId, actorId, "QUESTION_CREATED", "QUESTION", question.getId(), Map.of("version", 1));
+        return questionView(question, version);
+    }
+
+    @Transactional
+    public QuestionView createVersion(Long tenantId, Long actorId, Long questionId, VersionCommand c) {
+        Question question = questions.findByIdAndTenantId(questionId, tenantId).orElseThrow(notFound("QUESTION_NOT_FOUND"));
+        validateQuestion(question.getType(), c.options(), c.correctAnswers());
+        QuestionVersion version = versions.save(new QuestionVersion(tenant(tenantId), question, question.nextVersion(), c.prompt(), write(c.options()), write(c.correctAnswers()), c.explanation(), c.defaultPoints(), account(actorId)));
+        audit.record(tenantId, actorId, "QUESTION_VERSION_CREATED", "QUESTION", questionId, Map.of("version", version.getVersionNumber()));
+        return questionView(question, version);
+    }
+
+    @Transactional
+    public AssessmentView createAssessment(Long tenantId, Long actorId, AssessmentCommand c) {
+        if (assessments.existsByTenantIdAndCodeIgnoreCase(tenantId, c.code()))
+            throw conflict("ASSESSMENT_CODE_EXISTS", "Assessment code already exists.");
+        if (!c.closesAt().isAfter(c.opensAt()))
+            throw invalid("INVALID_ASSESSMENT_WINDOW", "Close time must be after open time.");
+        if (Duration.between(c.opensAt(), c.closesAt()).toMinutes() < c.durationMinutes())
+            throw invalid("DURATION_EXCEEDS_WINDOW", "Duration cannot exceed the assessment window.");
+        Course course = c.courseId() == null ? null : courses.findByIdAndTenantId(c.courseId(), tenantId).orElseThrow(notFound("COURSE_NOT_FOUND"));
+        Assessment value = assessments.save(new Assessment(tenant(tenantId), course, c.code(), c.title(), c.type(), c.opensAt(), c.closesAt(), c.durationMinutes(), c.attemptsAllowed(), c.randomizeQuestions(), c.priceRial(), account(actorId)));
+        audit.record(tenantId, actorId, "ASSESSMENT_CREATED", "ASSESSMENT", value.getId(), Map.of("code", value.getCode()));
+        return assessmentView(value);
+    }
+
+    @Transactional
+    public AssessmentView addSection(Long tenantId, Long actorId, Long assessmentId, SectionCommand c) {
+        Assessment assessment = draft(tenantId, assessmentId);
+        if (sections.existsByAssessmentIdAndSequenceNumber(assessmentId, c.sequenceNumber()))
+            throw conflict("SECTION_SEQUENCE_EXISTS", "Section sequence already exists.");
+        sections.save(new AssessmentSection(tenant(tenantId), assessment, c.title(), c.instructions(), c.sequenceNumber()));
+        audit.record(tenantId, actorId, "ASSESSMENT_SECTION_ADDED", "ASSESSMENT", assessmentId, Map.of());
+        return assessmentView(assessment);
+    }
+
+    @Transactional
+    public AssessmentView addQuestion(Long tenantId, Long actorId, Long assessmentId, AssessmentQuestionCommand c) {
+        Assessment assessment = draft(tenantId, assessmentId);
+        AssessmentSection section = sections.findByIdAndTenantId(c.sectionId(), tenantId).orElseThrow(notFound("ASSESSMENT_SECTION_NOT_FOUND"));
+        if (!section.getAssessment().getId().equals(assessmentId))
+            throw invalid("SECTION_ASSESSMENT_MISMATCH", "Section does not belong to this assessment.");
+        QuestionVersion version = versions.findByIdAndTenantId(c.questionVersionId(), tenantId).orElseThrow(notFound("QUESTION_VERSION_NOT_FOUND"));
+        if (assessmentQuestions.existsByAssessmentIdAndQuestionVersionId(assessmentId, version.getId()))
+            throw conflict("QUESTION_ALREADY_ATTACHED", "Question is already attached.");
+        if (assessmentQuestions.existsBySectionIdAndSequenceNumber(section.getId(), c.sequenceNumber()))
+            throw conflict("QUESTION_SEQUENCE_EXISTS", "Question sequence already exists in this section.");
+        assessmentQuestions.save(new AssessmentQuestion(tenant(tenantId), assessment, section, version, c.points(), c.sequenceNumber()));
+        assessment.updateTotalPoints(assessmentQuestions.totalPoints(assessmentId));
+        audit.record(tenantId, actorId, "ASSESSMENT_QUESTION_ADDED", "ASSESSMENT", assessmentId, Map.of("questionVersionId", version.getId().toString()));
+        return assessmentView(assessment);
+    }
+
+    @Transactional
+    public AssessmentView addTarget(Long tenantId, Long membershipId, Long actorId, Long assessmentId, Long classSectionId) {
+        Assessment assessment = draft(tenantId, assessmentId);
+        ClassSection section = classes.findByIdAndTenantId(classSectionId, tenantId).orElseThrow(notFound("CLASS_SECTION_NOT_FOUND"));
+        ensureClassAccess(tenantId, membershipId, section, "ASSESSMENT_WRITE");
+        if (targets.existsByAssessmentIdAndClassSectionId(assessmentId, classSectionId))
+            throw conflict("ASSESSMENT_TARGET_EXISTS", "Class is already targeted.");
+        targets.save(new AssessmentTarget(tenant(tenantId), assessment, section));
+        audit.record(tenantId, actorId, "ASSESSMENT_TARGET_ADDED", "ASSESSMENT", assessmentId, Map.of("classSectionId", classSectionId.toString()));
+        return assessmentView(assessment);
+    }
+
+    @Transactional
+    public AssessmentView publish(Long tenantId, Long membershipId, Long actorId, Long assessmentId) {
+        Assessment assessment = draft(tenantId, assessmentId);
+        List<AssessmentQuestion> items = assessmentQuestions.findAllByAssessmentIdOrderBySectionSequenceNumberAscSequenceNumberAsc(assessmentId);
+        List<AssessmentTarget> targetList = targets.findAllByAssessmentId(assessmentId);
+        if (items.isEmpty())
+            throw conflict("ASSESSMENT_HAS_NO_QUESTIONS", "Assessment must contain at least one question.");
+        if (targetList.isEmpty())
+            throw conflict("ASSESSMENT_HAS_NO_TARGETS", "Assessment must target at least one class.");
+        targetList.forEach(t -> ensureClassAccess(tenantId, membershipId, t.getClassSection(), "ASSESSMENT_PUBLISH"));
+        LinkedHashMap<Long, Enrollment> eligible = new LinkedHashMap<>();
+        for (AssessmentTarget target : targetList)
+            for (Enrollment enrollment : enrollments.findAllByTenantIdAndClassSectionIdOrderByStudentPersonLastNameAsc(tenantId, target.getClassSection().getId()))
+                if (enrollment.getStatus() == Enrollment.Status.ACTIVE)
+                    eligible.putIfAbsent(enrollment.getStudent().getId(), enrollment);
+        if (eligible.isEmpty())
+            throw conflict("ASSESSMENT_HAS_NO_PARTICIPANTS", "Target classes have no active students.");
+        Tenant tenant = tenant(tenantId);
+        eligible.values().forEach(e -> {
+            if (!participants.existsByAssessmentIdAndStudentId(assessmentId, e.getStudent().getId()))
+                participants.save(new AssessmentParticipant(tenant, assessment, e));
+        });
+        assessment.updateTotalPoints(assessmentQuestions.totalPoints(assessmentId));
+        assessment.publish(account(actorId), Instant.now(clock));
+        audit.record(tenantId, actorId, "ASSESSMENT_PUBLISHED", "ASSESSMENT", assessmentId, Map.of("participantCount", eligible.size(), "questionCount", items.size()));
+        return assessmentView(assessment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MyAssessmentView> mine(Long tenantId, Long membershipId) {
+        TenantMembership membership = memberships.findByIdAndTenantId(membershipId, tenantId).orElseThrow(notFound("MEMBERSHIP_NOT_FOUND"));
+        StudentProfile student = students.findByTenantIdAndPersonId(tenantId, membership.getPerson().getId()).orElseThrow(notFound("STUDENT_PROFILE_NOT_FOUND"));
+        return forStudent(tenantId, student.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<MyAssessmentView> forStudent(Long tenantId, Long studentId) {
+        students.findByIdAndTenantId(studentId, tenantId).orElseThrow(notFound("STUDENT_NOT_FOUND"));
+        return participants.findAllByTenantIdAndStudentIdOrderByCreatedAtDesc(tenantId, studentId).stream().filter(p -> p.getStatus() == AssessmentParticipant.Status.ELIGIBLE).map(p -> {
+            Assessment a = p.getAssessment();
+            long used = attempts.countByParticipantId(p.getId());
+            int remaining = Math.max(0, a.getAttemptsAllowed() - (int) used);
+            return new MyAssessmentView(a.getId(), a.getCode(), a.getTitle(), a.getType().name(), a.getStatus().name(), a.getOpensAt(), a.getClosesAt(), a.getDurationMinutes(), a.getTotalPoints(), a.getAttemptsAllowed(), (int) used, remaining, a.getPriceRial(), p.isFeePaid(a.getPriceRial()));
+        }).toList();
+    }
+
+    private boolean canManage(Long tenantId, Long membershipId, Long accountId, Assessment assessment, String permission) {
+        if (authorizer.isTenantAdmin()) return true;
+        if (assessment.getCreatedBy() != null && assessment.getCreatedBy().getId().equals(accountId)) return true;
+        TenantMembership membership = memberships.findByIdAndTenantId(membershipId, tenantId).orElseThrow(notFound("MEMBERSHIP_NOT_FOUND"));
+        Optional<InstructorProfile> instructor = instructors.findByTenantIdAndPersonId(tenantId, membership.getPerson().getId());
+        List<AssessmentTarget> values = targets.findAllByAssessmentId(assessment.getId());
+        if (instructor.isPresent())
+            return values.stream().anyMatch(t -> classInstructors.existsByClassSectionIdAndInstructorIdAndStatus(t.getClassSection().getId(), instructor.get().getId(), ClassInstructor.Status.ACTIVE));
+        return values.stream().anyMatch(t -> authorizer.hasPermissionForBranch(permission, t.getClassSection().getOffering().getBranch().getId()));
+    }
+
+    private void ensureClassAccess(Long tenantId, Long membershipId, ClassSection section, String permission) {
+        if (authorizer.isTenantAdmin()) return;
+        TenantMembership membership = memberships.findByIdAndTenantId(membershipId, tenantId).orElseThrow(notFound("MEMBERSHIP_NOT_FOUND"));
+        Optional<InstructorProfile> instructor = instructors.findByTenantIdAndPersonId(tenantId, membership.getPerson().getId());
+        boolean allowed = instructor.isPresent() ? classInstructors.existsByClassSectionIdAndInstructorIdAndStatus(section.getId(), instructor.get().getId(), ClassInstructor.Status.ACTIVE) : authorizer.hasPermissionForBranch(permission, section.getOffering().getBranch().getId());
+        if (!allowed)
+            throw new ApiException(HttpStatus.FORBIDDEN, "ASSESSMENT_CLASS_ACCESS_DENIED", "You are not authorized for this class.");
+    }
+
+    private Assessment draft(Long tenantId, Long id) {
+        Assessment value = assessments.findByIdAndTenantId(id, tenantId).orElseThrow(notFound("ASSESSMENT_NOT_FOUND"));
+        if (value.getStatus() != Assessment.Status.DRAFT)
+            throw conflict("ASSESSMENT_NOT_EDITABLE", "Published assessments cannot be edited.");
+        return value;
+    }
+
+    private void validateQuestion(Question.Type type, List<String> options, List<String> answers) {
+        List<String> opts = options == null ? List.of() : options.stream().filter(v -> v != null && !v.isBlank()).map(String::strip).toList();
+        List<String> keys = answers == null ? List.of() : answers.stream().filter(v -> v != null && !v.isBlank()).map(String::strip).toList();
+        if (Set.of(Question.Type.SINGLE_CHOICE, Question.Type.MULTIPLE_CHOICE).contains(type)) {
+            if (opts.size() < 2)
+                throw invalid("QUESTION_OPTIONS_REQUIRED", "Choice questions require at least two options.");
+            if (keys.isEmpty() || !opts.containsAll(keys))
+                throw invalid("INVALID_ANSWER_KEY", "Correct answers must belong to the options.");
+            if (type == Question.Type.SINGLE_CHOICE && keys.size() != 1)
+                throw invalid("SINGLE_ANSWER_REQUIRED", "Single-choice questions require one correct answer.");
+        }
+        if (type == Question.Type.TRUE_FALSE && (keys.size() != 1 || !Set.of("TRUE", "FALSE").contains(keys.get(0).toUpperCase())))
+            throw invalid("TRUE_FALSE_ANSWER_REQUIRED", "True/false questions require TRUE or FALSE as answer.");
+    }
+
+    private QuestionVersion latest(Long questionId) {
+        return versions.findFirstByQuestionIdOrderByVersionNumberDesc(questionId).orElseThrow(notFound("QUESTION_VERSION_NOT_FOUND"));
+    }
+
+    private String write(List<String> value) {
+        try {
+            return value == null ? "[]" : json.writeValueAsString(value);
+        } catch (Exception e) {
+            throw invalid("INVALID_QUESTION_CONTENT", "Question content could not be serialized.");
+        }
+    }
+
+    private List<String> read(String value) {
+        try {
+            return value == null ? List.of() : json.readValue(value, new TypeReference<>() {
+            });
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private QuestionView questionView(Question q, QuestionVersion v) {
+        return new QuestionView(q.getId(), q.getCode(), q.getType().name(), q.getCourse() == null ? null : q.getCourse().getId(), q.getCourse() == null ? null : q.getCourse().getTitle(), q.getStatus().name(), v.getId(), v.getVersionNumber(), v.getPrompt(), read(v.getOptionsJson()), read(v.getAnswerKeyJson()), v.getExplanation(), v.getDefaultPoints());
+    }
+
+    private AssessmentView assessmentView(Assessment a) {
+        List<SectionView> sectionViews = sections.findAllByAssessmentIdOrderBySequenceNumber(a.getId()).stream().map(s -> new SectionView(s.getId(), s.getTitle(), s.getInstructions(), s.getSequenceNumber())).toList();
+        List<AssessmentQuestionView> questionViews = assessmentQuestions.findAllByAssessmentIdOrderBySectionSequenceNumberAscSequenceNumberAsc(a.getId()).stream().map(q -> new AssessmentQuestionView(q.getId(), q.getSection().getId(), q.getQuestionVersion().getId(), q.getQuestionVersion().getQuestion().getCode(), q.getQuestionVersion().getPrompt(), q.getPoints(), q.getSequenceNumber())).toList();
+        List<TargetView> targetViews = targets.findAllByAssessmentId(a.getId()).stream().map(t -> new TargetView(t.getId(), t.getClassSection().getId(), t.getClassSection().getName(), t.getClassSection().getOffering().getBranch().getName())).toList();
+        return new AssessmentView(a.getId(), a.getCode(), a.getTitle(), a.getType().name(), a.getStatus().name(), a.getCourse() == null ? null : a.getCourse().getId(), a.getCourse() == null ? null : a.getCourse().getTitle(), a.getOpensAt(), a.getClosesAt(), a.getDurationMinutes(), a.getAttemptsAllowed(), a.isRandomizeQuestions(), a.getPriceRial(), a.getTotalPoints(), a.getPublishedAt(), participants.countByAssessmentId(a.getId()), sectionViews, questionViews, targetViews);
+    }
+
+    private Tenant tenant(Long id) {
+        return tenants.findById(id).orElseThrow(notFound("TENANT_NOT_FOUND"));
+    }
+
+    private UserAccount account(Long id) {
+        return accounts.findById(id).orElseThrow(notFound("ACTOR_NOT_FOUND"));
+    }
+
+    private static Supplier<ApiException> notFound(String code) {
+        return () -> new ApiException(HttpStatus.NOT_FOUND, code, "The requested assessment item was not found.");
+    }
+
+    private static ApiException invalid(String code, String detail) {
+        return new ApiException(HttpStatus.BAD_REQUEST, code, detail);
+    }
+
+    private static ApiException conflict(String code, String detail) {
+        return new ApiException(HttpStatus.CONFLICT, code, detail);
+    }
+
+    public record QuestionCommand(Long courseId, String code, Question.Type type, String prompt, List<String> options,
+                                  List<String> correctAnswers, String explanation, BigDecimal defaultPoints) {
+    }
+
+    public record VersionCommand(String prompt, List<String> options, List<String> correctAnswers, String explanation,
+                                 BigDecimal defaultPoints) {
+    }
+
+    public record AssessmentCommand(Long courseId, String code, String title, Assessment.Type type, Instant opensAt,
+                                    Instant closesAt, int durationMinutes, int attemptsAllowed,
+                                    boolean randomizeQuestions, long priceRial) {
+    }
+
+    public record SectionCommand(String title, String instructions, int sequenceNumber) {
+    }
+
+    public record AssessmentQuestionCommand(Long sectionId, Long questionVersionId, BigDecimal points,
+                                            int sequenceNumber) {
+    }
+
+    public record QuestionView(Long id, String code, String type, Long courseId, String courseTitle, String status,
+                               Long currentVersionId, int versionNumber, String prompt, List<String> options,
+                               List<String> correctAnswers, String explanation, BigDecimal defaultPoints) {
+    }
+
+    public record SectionView(Long id, String title, String instructions, int sequenceNumber) {
+    }
+
+    public record AssessmentQuestionView(Long id, Long sectionId, Long questionVersionId, String questionCode,
+                                         String prompt, BigDecimal points, int sequenceNumber) {
+    }
+
+    public record TargetView(Long id, Long classSectionId, String className, String branchName) {
+    }
+
+    public record AssessmentView(Long id, String code, String title, String type, String status, Long courseId,
+                                 String courseTitle, Instant opensAt, Instant closesAt, int durationMinutes,
+                                 int attemptsAllowed, boolean randomizeQuestions, long priceRial,
+                                 BigDecimal totalPoints, Instant publishedAt, long participantCount,
+                                 List<SectionView> sections, List<AssessmentQuestionView> questions,
+                                 List<TargetView> targets) {
+    }
+
+    public record MyAssessmentView(Long id, String code, String title, String type, String status, Instant opensAt,
+                                   Instant closesAt, int durationMinutes, BigDecimal totalPoints, int attemptsAllowed,
+                                   int attemptsUsed, int attemptsRemaining, long priceRial, boolean feePaid) {
+    }
 }

@@ -229,7 +229,7 @@ public class DemoDataService {
                 List.of(), List.of("hello"), "پاسخ مورد انتظار: hello", BigDecimal.valueOf(2)));
         AssessmentService.AssessmentView quiz = assessments.createAssessment(tenantId, actorId, new AssessmentService.AssessmentCommand(
                 foundation.id(), "DEMO-QUIZ-1", "آزمونک آشنایی با زبان پایه", Assessment.Type.QUIZ,
-                now.minusSeconds(3600), now.plusSeconds(14L * 24 * 3600), 20, 2, false));
+                now.minusSeconds(3600), now.plusSeconds(14L * 24 * 3600), 20, 2, false, 0));
         quiz = assessments.addSection(tenantId, actorId, quiz.id(), new AssessmentService.SectionCommand(
                 "سؤالات اصلی", "با دقت پاسخ دهید.", 1));
         Long sectionId = quiz.sections().get(0).id();

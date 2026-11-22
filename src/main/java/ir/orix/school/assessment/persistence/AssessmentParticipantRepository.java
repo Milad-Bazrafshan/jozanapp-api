@@ -1,0 +1,3 @@
+package ir.orix.school.assessment.persistence;
+import java.util.*; import org.springframework.data.jpa.repository.*; import ir.orix.school.assessment.domain.AssessmentParticipant;
+public interface AssessmentParticipantRepository extends JpaRepository<AssessmentParticipant, Long>{ long countByAssessmentId(Long assessmentId); boolean existsByAssessmentIdAndStudentId(Long assessmentId,Long studentId); @EntityGraph(attributePaths={"assessment","assessment.course","student"}) List<AssessmentParticipant> findAllByTenantIdAndStudentIdOrderByCreatedAtDesc(Long tenantId,Long studentId); @EntityGraph(attributePaths={"assessment","student"}) Optional<AssessmentParticipant> findByAssessmentIdAndStudentId(Long assessmentId,Long studentId); }

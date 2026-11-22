@@ -1,0 +1,10 @@
+.idea/
+.vscode/
+*.iml
+.env
+target/
+.mvn/apache-maven-*/
+.mvn/apache-maven-*.zip
+.mvn/apache-maven-*.tar.gz
+.data/
+*.log

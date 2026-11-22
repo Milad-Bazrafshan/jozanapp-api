@@ -1,0 +1,107 @@
+spring:
+  application:
+    name: school-backend-api
+  profiles:
+    active: prod-h2
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/orix_school}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:1234}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: school
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    create-schemas: true
+    default-schema: school
+    schemas: school
+  mvc:
+    problemdetails:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        same-site: lax
+        secure: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+
+app:
+  version: ${APP_VERSION:0.1.0-SNAPSHOT}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:5175}
+  storage:
+    root: ${STORAGE_ROOT:./data/files}
+  security:
+    expose-password-reset-token: false
+    jwt:
+      issuer: ${JWT_ISSUER:orix-school-platform}
+      secret: ${JWT_SECRET:local-development-secret-change-this-before-production-2026}
+      access-token-duration: ${ACCESS_TOKEN_DURATION:PT15M}
+      refresh-token-duration: ${REFRESH_TOKEN_DURATION:P30D}
+      password-reset-duration: ${PASSWORD_RESET_DURATION:PT30M}
+    cookie:
+      secure: ${COOKIE_SECURE:false}
+      same-site: ${COOKIE_SAME_SITE:Lax}
+      access-name: ${COOKIE_ACCESS_NAME:orix_access}
+      refresh-name: ${COOKIE_REFRESH_NAME:orix_refresh}
+  bootstrap:
+    enabled: false
+    tenant-name: ${BOOTSTRAP_TENANT_NAME:آموزشگاه نمونه}
+    tenant-slug: ${BOOTSTRAP_TENANT_SLUG:demo-school}
+    admin-email: ${BOOTSTRAP_ADMIN_EMAIL:admin@example.com}
+    admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:change-me-now}
+    admin-first-name: ${BOOTSTRAP_ADMIN_FIRST_NAME:مدیر}
+    admin-last-name: ${BOOTSTRAP_ADMIN_LAST_NAME:سیستم}
+  demo-data:
+    enabled: true
+    tenant-slug: ${DEMO_DATA_TENANT_SLUG:demo-school}
+    marker-student-code: DEMO-STU-001
+    password: ${DEMO_DATA_PASSWORD:change-me-now}
+  zohal:
+    enabled: ${ZOHAL_ENABLED:false}
+    base-url: ${ZOHAL_BASE_URL:https://service.zohal.io}
+    token: ${ZOHAL_TOKEN:}
+    national-identity-inquiry-path: ${ZOHAL_NATIONAL_IDENTITY_PATH:/api/v0/services/inquiry/national_identity_inquiry}
+    connect-timeout-ms: ${ZOHAL_CONNECT_TIMEOUT_MS:8000}
+    read-timeout-ms: ${ZOHAL_READ_TIMEOUT_MS:25000}
+  counseling:
+    monthly-report-cron: ${COUNSELING_MONTHLY_CRON:0 0 6 1 * *}
+    ai:
+      enabled: ${COUNSELING_AI_ENABLED:false}
+      base-url: ${COUNSELING_AI_BASE_URL:https://api.openai.com/v1}
+      api-key: ${COUNSELING_AI_API_KEY:}
+      model: ${COUNSELING_AI_MODEL:gpt-4o-mini}
+      max-tokens: ${COUNSELING_AI_MAX_TOKENS:800}
+
+logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId:-}]"

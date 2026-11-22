@@ -1,0 +1,32 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  config:
+    activate:
+      on-profile: prod
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  security:
+    expose-password-reset-token: false
+    cookie:
+      secure: true
+      same-site: Strict
+  bootstrap:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+  demo-data:
+    enabled: false
+  zohal:
+    enabled: ${ZOHAL_ENABLED:true}

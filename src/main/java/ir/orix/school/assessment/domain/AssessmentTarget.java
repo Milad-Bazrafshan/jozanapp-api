@@ -1,0 +1,4 @@
+package ir.orix.school.assessment.domain;
+import jakarta.persistence.*; import ir.orix.school.classroom.domain.ClassSection; import ir.orix.school.organization.domain.Tenant; import ir.orix.school.shared.persistence.AuditedEntity;
+@Entity @Table(name="assessment_target",schema="school")
+public class AssessmentTarget extends AuditedEntity { @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="tenant_id") private Tenant tenant; @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="assessment_id") private Assessment assessment; @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="class_section_id") private ClassSection classSection; protected AssessmentTarget(){} public AssessmentTarget(Tenant tenant,Assessment assessment,ClassSection section){this.tenant=tenant;this.assessment=assessment;this.classSection=section;} public Assessment getAssessment(){return assessment;} public ClassSection getClassSection(){return classSection;} }

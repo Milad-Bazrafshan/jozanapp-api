@@ -1,0 +1,4 @@
+package ir.orix.school.assessment.domain;
+import java.time.Instant; import jakarta.persistence.*; import ir.orix.school.organization.domain.Tenant;
+@Entity @Table(name="assessment_attempt_event",schema="school")
+public class AssessmentAttemptEvent { @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id; @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="tenant_id") private Tenant tenant; @ManyToOne(fetch=FetchType.LAZY,optional=false) @JoinColumn(name="attempt_id") private AssessmentAttempt attempt; @Column(name="event_type",nullable=false,length=40) private String eventType; @Column(name="occurred_at",nullable=false) private Instant occurredAt; @Column(columnDefinition="TEXT") private String metadata; protected AssessmentAttemptEvent(){} public AssessmentAttemptEvent(Tenant t,AssessmentAttempt a,String type,Instant now,String metadata){tenant=t;attempt=a;eventType=type;occurredAt=now;this.metadata=metadata;} }

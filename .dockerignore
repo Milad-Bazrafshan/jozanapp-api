@@ -1,0 +1,7 @@
+target
+.git
+.env
+.mvn/apache-maven-*
+.mvn/*.zip
+.mvn/*.tar.gz
+*.log

@@ -1,6 +1,7 @@
 package ir.orix.school.shared.persistence;
 
 import java.time.Instant;
+import java.util.Date;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
@@ -15,7 +16,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Base entity: numeric primary key (per-table identity / sequence). Audit timestamps and optimistic lock.
+ * Base entity: numeric primary key (per-table identity / sequence). Audit timestamps and optimistic lock (version = Date).
  */
 @Getter
 @Setter
@@ -39,7 +40,7 @@ public abstract class AuditedEntity {
     @Version
     @Column(nullable = false)
     @Setter(AccessLevel.NONE)
-    private long version;
+    private Date version;
 
     protected AuditedEntity() {
     }
@@ -49,6 +50,9 @@ public abstract class AuditedEntity {
         Instant now = Instant.now();
         createdAt = now;
         updatedAt = now;
+        if (version == null) {
+            version = Date.from(now);
+        }
     }
 
     @PreUpdate

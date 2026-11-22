@@ -6,7 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "permission", schema = "school")
+@Table(name = "permission_type", schema = "school")
 public class Permission {
 
     @Id

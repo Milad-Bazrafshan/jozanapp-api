@@ -535,6 +535,10 @@ public class AssessmentExecutionService {
         return new ApiException(HttpStatus.FORBIDDEN, code, detail);
     }
 
+    public void payExamFee(Long aLong, Long aLong1, Long aLong2, Long assessmentId) {
+
+    }
+
     public record QuestionView(
             Long id, String section, String type, String prompt, List<String> options, BigDecimal points, int sequenceNumber) {}
 

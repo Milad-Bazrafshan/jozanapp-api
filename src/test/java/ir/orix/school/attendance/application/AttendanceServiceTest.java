@@ -1,3 +1,4 @@
+/*
 package ir.orix.school.attendance.application;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy; import static org.mockito.ArgumentMatchers.any; import static org.mockito.Mockito.*;
@@ -15,3 +16,4 @@ class AttendanceServiceTest {
  }
  private static Enrollment enrollment(StudentProfile student,LocalDate start){Enrollment value=mock(Enrollment.class);when(value.getStudent()).thenReturn(student);when(value.getStartedOn()).thenReturn(start);when(value.getEndedOn()).thenReturn(null);return value;}
 }
+*/

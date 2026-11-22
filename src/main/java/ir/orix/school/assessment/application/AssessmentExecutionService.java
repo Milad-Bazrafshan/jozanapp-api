@@ -61,7 +61,6 @@ public class AssessmentExecutionService {
     private final GradeHistoryRepository histories;
     private final AssessmentAttemptEventRepository events;
     private final AuditService audit;
-    private final WalletService wallets;
     private final Clock clock;
     private final ObjectMapper json = new ObjectMapper();
 

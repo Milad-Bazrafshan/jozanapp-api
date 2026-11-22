@@ -14,7 +14,7 @@ import ir.orix.school.shared.persistence.AuditedEntity;
 @Table(name = "tenant", schema = "school")
 public class Tenant extends AuditedEntity {
 
-    public enum Status { ACTIVE, SUSPENDED, CLOSED }
+    public enum Status {ACTIVE, SUSPENDED, CLOSED}
 
     @Column(nullable = false, unique = true, length = 80)
     private String slug;
@@ -60,23 +60,53 @@ public class Tenant extends AuditedEntity {
     }
 
     public void updatePlatformSettings(boolean courseSelectionEnabled, boolean virtualClassEnabled,
-            String smsProvider, String meetingProvider, String meetingBaseUrl, String meetingSecret) {
+                                       String smsProvider, String meetingProvider, String meetingBaseUrl, String meetingSecret) {
         this.courseSelectionEnabled = courseSelectionEnabled;
         this.virtualClassEnabled = virtualClassEnabled;
         if (smsProvider != null && !smsProvider.isBlank()) this.smsProvider = smsProvider.strip().toUpperCase();
-        if (meetingProvider != null && !meetingProvider.isBlank()) this.meetingProvider = meetingProvider.strip().toUpperCase();
+        if (meetingProvider != null && !meetingProvider.isBlank())
+            this.meetingProvider = meetingProvider.strip().toUpperCase();
         this.meetingBaseUrl = meetingBaseUrl == null || meetingBaseUrl.isBlank() ? null : meetingBaseUrl.strip();
         if (meetingSecret != null && !meetingSecret.isBlank()) this.meetingSecret = meetingSecret.strip();
     }
 
-    public String getSlug() { return slug; }
-    public String getName() { return name; }
-    public Status getStatus() { return status; }
-    public String getTimezone() { return timezone; }
-    public boolean isCourseSelectionEnabled() { return courseSelectionEnabled; }
-    public boolean isVirtualClassEnabled() { return virtualClassEnabled; }
-    public String getSmsProvider() { return smsProvider; }
-    public String getMeetingProvider() { return meetingProvider; }
-    public String getMeetingBaseUrl() { return meetingBaseUrl; }
-    public String getMeetingSecret() { return meetingSecret; }
+    public String getSlug() {
+        return slug;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Status getStatus() {
+        return status;
+    }
+
+    public String getTimezone() {
+        return timezone;
+    }
+
+    public boolean isCourseSelectionEnabled() {
+        return courseSelectionEnabled;
+    }
+
+    public boolean isVirtualClassEnabled() {
+        return virtualClassEnabled;
+    }
+
+    public String getSmsProvider() {
+        return smsProvider;
+    }
+
+    public String getMeetingProvider() {
+        return meetingProvider;
+    }
+
+    public String getMeetingBaseUrl() {
+        return meetingBaseUrl;
+    }
+
+    public String getMeetingSecret() {
+        return meetingSecret;
+    }
 }

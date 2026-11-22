@@ -13,7 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: none
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
@@ -51,6 +51,6 @@ app:
     tenant-name: همیار آموزش جوزان
     tenant-slug: jozan
   demo-data:
-    enabled: ${DEMO_DATA_ENABLED:false}
+    enabled: true
   zohal:
     enabled: ${ZOHAL_ENABLED:false}

@@ -4,23 +4,20 @@ spring:
   config:
     activate:
       on-profile: prod-h2
+
   datasource:
     driver-class-name: org.h2.Driver
-    url: >-
-      jdbc:h2:file:${H2_DATA_DIR:/data/jozan}/jozan-school;
-      AUTO_SERVER=FALSE;
-      MODE=PostgreSQL;
-      DATABASE_TO_LOWER=TRUE;
-      DEFAULT_NULL_ORDERING=HIGH;
-      INIT=CREATE SCHEMA IF NOT EXISTS school
+    url: "jdbc:h2:file:${H2_DATA_DIR:/data/jozan}/jozan-school;AUTO_SERVER=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;INIT=CREATE SCHEMA IF NOT EXISTS school"
     username: ${H2_USERNAME:sa}
     password: ${H2_PASSWORD:}
+
   jpa:
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+
   flyway:
     enabled: true
     create-schemas: true

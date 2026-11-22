@@ -52,5 +52,6 @@ app:
     tenant-slug: jozan
   demo-data:
     enabled: true
+    tenant-slug: jozan
   zohal:
     enabled: ${ZOHAL_ENABLED:false}

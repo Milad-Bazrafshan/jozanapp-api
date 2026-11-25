@@ -186,11 +186,12 @@ public class PeopleService {
     }
 
     private void createOptionalLogin(Tenant tenant, Person person, String email, String password) {
-        if (email == null || email.isBlank()) return;
+        String login = email != null && !email.isBlank() ? email.strip() : person.getNationalId();
+        if (login == null || login.isBlank()) return;
         if (password == null || password.length() < 10)
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INITIAL_PASSWORD_REQUIRED", "An initial password of at least 10 characters is required when email is provided.");
-        if (accounts.findByEmailIgnoreCase(email).isPresent()) throw conflict("ACCOUNT_EMAIL_EXISTS");
-        UserAccount account = accounts.save(new UserAccount(email, passwordEncoder.encode(password), clock.instant()));
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INITIAL_PASSWORD_REQUIRED", "An initial password of at least 10 characters is required when a login is provided.");
+        if (accounts.findByEmailIgnoreCase(login).isPresent()) throw conflict("ACCOUNT_EMAIL_EXISTS");
+        UserAccount account = accounts.save(new UserAccount(login, passwordEncoder.encode(password), clock.instant()));
         memberships.save(new TenantMembership(tenant, account, person, clock.instant()));
     }
 

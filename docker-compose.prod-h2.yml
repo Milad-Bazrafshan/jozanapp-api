@@ -1,0 +1,24 @@
+# بک‌اند H2 با داده روی مسیر ثابت هاست (بروزرسانی ایمیج داده را پاک نمی‌کند)
+name: jozan-backend
+
+services:
+  backend:
+    image: docker.jozanapp.ir/jozan/school-backend-api:latest
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod-h2
+      H2_DATA_DIR: /data/jozan
+      STORAGE_ROOT: /data/jozan/files
+      CORS_ALLOWED_ORIGINS: https://app.jozanapp.ir,https://admin.jozanapp.ir,https://instructor.jozanapp.ir
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?set BOOTSTRAP_ADMIN_PASSWORD}
+      BOOTSTRAP_ADMIN_NATIONAL_ID: ${BOOTSTRAP_ADMIN_NATIONAL_ID:-0099999991}
+      BOOTSTRAP_TENANT_SLUG: jozan
+      DEMO_DATA_ENABLED: "true"
+      DEMO_DATA_PASSWORD: ${DEMO_DATA_PASSWORD:-${BOOTSTRAP_ADMIN_PASSWORD}}
+      DEMO_DATA_FAIL_FAST: "true"
+    volumes:
+      - ${JOZAN_DATA_DIR:-/var/lib/jozanapp}:/data/jozan

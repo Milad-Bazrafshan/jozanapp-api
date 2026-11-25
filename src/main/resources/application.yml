@@ -76,14 +76,16 @@ app:
   bootstrap:
     enabled: false
     tenant-name: ${BOOTSTRAP_TENANT_NAME:آموزشگاه نمونه}
-    tenant-slug: ${BOOTSTRAP_TENANT_SLUG:demo-school}
-    admin-email: ${BOOTSTRAP_ADMIN_EMAIL:admin@example.com}
+    tenant-slug: ${BOOTSTRAP_TENANT_SLUG:jozan}
+    admin-national-id: ${BOOTSTRAP_ADMIN_NATIONAL_ID:0099999991}
+    admin-email: ${BOOTSTRAP_ADMIN_EMAIL:}
     admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:change-me-now}
     admin-first-name: ${BOOTSTRAP_ADMIN_FIRST_NAME:مدیر}
     admin-last-name: ${BOOTSTRAP_ADMIN_LAST_NAME:سیستم}
   demo-data:
     enabled: true
-    tenant-slug: ${DEMO_DATA_TENANT_SLUG:demo-school}
+    tenant-slug: ${DEMO_DATA_TENANT_SLUG:jozan}
+    fail-fast: ${DEMO_DATA_FAIL_FAST:false}
     marker-student-code: DEMO-STU-001
     password: ${DEMO_DATA_PASSWORD:change-me-now}
   zohal:

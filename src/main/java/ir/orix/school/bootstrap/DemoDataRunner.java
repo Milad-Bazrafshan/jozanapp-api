@@ -27,6 +27,9 @@ public class DemoDataRunner implements ApplicationRunner {
             service.initialize(properties);
         } catch (Exception exception) {
             log.error("Demo data seed failed", exception);
+            if (properties.failFast()) {
+                throw new IllegalStateException("Demo data seed failed", exception);
+            }
         }
     }
 }

@@ -4,11 +4,17 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import ir.orix.school.organization.domain.TenantMembership;
 
 public interface TenantMembershipRepository extends JpaRepository<TenantMembership, Long> {
     @EntityGraph(attributePaths = {"tenant", "userAccount", "person"})
     Optional<TenantMembership> findByTenantIdAndUserAccountEmailIgnoreCase(Long tenantId, String email);
+
+    @EntityGraph(attributePaths = {"tenant", "userAccount", "person"})
+    @Query("SELECT m FROM TenantMembership m WHERE m.tenant.id = :tenantId AND m.person.nationalId = :nationalId")
+    Optional<TenantMembership> findByTenantIdAndPersonNationalId(@Param("tenantId") Long tenantId, @Param("nationalId") String nationalId);
 
     @EntityGraph(attributePaths = {"tenant", "userAccount", "person"})
     Optional<TenantMembership> findByIdAndTenantId(Long id, Long tenantId);

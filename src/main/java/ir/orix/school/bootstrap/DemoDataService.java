@@ -118,8 +118,7 @@ public class DemoDataService {
                 ? "DEMO-STU-001" : config.markerStudentCode();
         if (students.existsByTenantIdAndStudentCodeIgnoreCase(tenant.getId(), marker)) {
             log.info("Demo data already present for tenant '{}'", slug);
-            TenantMembership admin = memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), bootstrap.adminEmail())
-                    .orElseThrow(() -> new IllegalStateException("Bootstrap admin membership was not found for demo data seed"));
+            TenantMembership admin = requireBootstrapAdmin(tenant);
             seedFinance(tenant, admin);
             grantInstructorRole(tenant);
             ensureCounselorDemo(tenant, admin, config.password() == null || config.password().isBlank() ? "change-me-now" : config.password());
@@ -131,8 +130,7 @@ public class DemoDataService {
         if (password.length() < 10) {
             throw new IllegalStateException("DEMO_DATA_PASSWORD must contain at least 10 characters");
         }
-        TenantMembership admin = memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), bootstrap.adminEmail())
-                .orElseThrow(() -> new IllegalStateException("Bootstrap admin membership was not found for demo data seed"));
+        TenantMembership admin = requireBootstrapAdmin(tenant);
         seed(tenant, admin, marker, password);
         log.info("Demo data seeded for tenant '{}' (students, guardians, classes, schedule, attendance, quiz, finance)", slug);
     }
@@ -151,20 +149,20 @@ public class DemoDataService {
 
         PeopleService.InstructorView instructor = people.createInstructor(tenantId, actorId, new PeopleService.CreateInstructor(
                 "DEMO-INS-001", "استاد", "زبان انگلیسی",
-                person("مینا", "رضایی", "0011111111", "09120000011", "instructor@example.com", password)));
+                person("مینا", "رضایی", "0011111111", "09120000011", null, password)));
         PeopleService.StudentView sara = people.createStudent(tenantId, actorId, new PeopleService.CreateStudent(
                 marker, today.minusDays(20),
-                person("سارا", "احمدی", "0022222221", "09120000021", "student1@example.com", password)));
+                person("سارا", "احمدی", "0022222221", "09120000021", null, password)));
         PeopleService.StudentView reza = people.createStudent(tenantId, actorId, new PeopleService.CreateStudent(
                 "DEMO-STU-002", today.minusDays(18),
-                person("رضا", "کریمی", "0022222222", "09120000022", "student2@example.com", password)));
+                person("رضا", "کریمی", "0022222222", "09120000022", null, password)));
         PeopleService.StudentView nila = people.createStudent(tenantId, actorId, new PeopleService.CreateStudent(
                 "DEMO-STU-003", today.minusDays(16),
-                person("نیلا", "محمدی", "0022222223", "09120000023", "student3@example.com", password)));
+                person("نیلا", "محمدی", "0022222223", "09120000023", null, password)));
         PeopleService.GuardianView father = people.createGuardian(tenantId, actorId, new PeopleService.CreateGuardian(
-                "کارمند", person("حسین", "احمدی", "0033333331", "09120000031", "guardian@example.com", password)));
+                "کارمند", person("حسین", "احمدی", "0033333331", "09120000031", null, password)));
         PeopleService.GuardianView mother = people.createGuardian(tenantId, actorId, new PeopleService.CreateGuardian(
-                "پزشک", person("مریم", "محمدی", "0033333332", "09120000032", "guardian2@example.com", password)));
+                "پزشک", person("مریم", "محمدی", "0033333332", "09120000032", null, password)));
         people.linkGuardian(tenantId, actorId, new PeopleService.LinkGuardian(
                 sara.id(), father.id(), StudentGuardian.RelationshipType.FATHER, true, true, true, true, true, today.minusDays(20)));
         people.linkGuardian(tenantId, actorId, new PeopleService.LinkGuardian(
@@ -356,7 +354,7 @@ public class DemoDataService {
     }
 
     private void grantInstructorRole(Tenant tenant) {
-        TenantMembership instructorMembership = memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), "instructor@example.com")
+        TenantMembership instructorMembership = memberships.findByTenantIdAndPersonNationalId(tenant.getId(), "0011111111")
                 .orElse(null);
         if (instructorMembership == null) return;
         AccessRole role = roles.findAllByTenantIdOrderByName(tenant.getId()).stream()
@@ -368,7 +366,7 @@ public class DemoDataService {
                 .anyMatch(item -> "INSTRUCTOR".equalsIgnoreCase(item.getRole().getCode()));
         if (!granted) {
             grants.save(new AccessGrant(tenant, instructorMembership, role, AccessGrant.ScopeType.TENANT, null, instructorMembership.getUserAccount()));
-            log.info("Granted INSTRUCTOR role to instructor@example.com");
+            log.info("Granted INSTRUCTOR role to demo instructor (0011111111)");
         }
     }
 
@@ -381,10 +379,10 @@ public class DemoDataService {
             log.info("Counselor demo skipped; DEMO-STU-001 not found");
             return;
         }
-        ensureCounselorLogin(tenant, admin, password, "counselor@example.com", "دانیال", "مشاور", "0044444441", "DEMO-COUN-JR", "COUNSELOR_JUNIOR");
-        ensureCounselorLogin(tenant, admin, password, "counselor.senior@example.com", "شیدا", "ارشد", "0044444442", "DEMO-COUN-SR", "COUNSELOR_SENIOR");
-        TenantMembership junior = memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), "counselor@example.com").orElse(null);
-        TenantMembership senior = memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), "counselor.senior@example.com").orElse(null);
+        ensureCounselorLogin(tenant, admin, password, "دانیال", "مشاور", "0044444441", "DEMO-COUN-JR", "COUNSELOR_JUNIOR");
+        ensureCounselorLogin(tenant, admin, password, "شیدا", "ارشد", "0044444442", "DEMO-COUN-SR", "COUNSELOR_SENIOR");
+        TenantMembership junior = memberships.findByTenantIdAndPersonNationalId(tenant.getId(), "0044444441").orElse(null);
+        TenantMembership senior = memberships.findByTenantIdAndPersonNationalId(tenant.getId(), "0044444442").orElse(null);
         if (junior == null || senior == null) return;
         runAs(admin, () -> {
             if (counseling.listAssignments(tenant.getId()).stream().noneMatch(item -> sara.id().equals(item.targetId()))) {
@@ -420,19 +418,28 @@ public class DemoDataService {
         });
     }
 
-    private void ensureCounselorLogin(Tenant tenant, TenantMembership admin, String password, String email, String first, String last,
+    private void ensureCounselorLogin(Tenant tenant, TenantMembership admin, String password, String first, String last,
             String nationalId, String code, String roleCode) {
-        if (memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), email).isPresent()) {
-            grantRoleByEmail(tenant, email, roleCode);
+        if (memberships.findByTenantIdAndPersonNationalId(tenant.getId(), nationalId).isPresent()) {
+            grantRoleByNationalId(tenant, nationalId, roleCode);
             return;
         }
         people.createInstructor(tenant.getId(), admin.getUserAccount().getId(), new PeopleService.CreateInstructor(
-                code, "مشاور", "مشاوره تحصیلی", person(first, last, nationalId, "09120000041", email, password)));
-        grantRoleByEmail(tenant, email, roleCode);
+                code, "مشاور", "مشاوره تحصیلی", person(first, last, nationalId, "09120000041", null, password)));
+        grantRoleByNationalId(tenant, nationalId, roleCode);
     }
 
-    private void grantRoleByEmail(Tenant tenant, String email, String roleCode) {
-        TenantMembership membership = memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), email).orElse(null);
+    private TenantMembership requireBootstrapAdmin(Tenant tenant) {
+        String login = bootstrap.adminNationalId() != null && !bootstrap.adminNationalId().isBlank()
+                ? bootstrap.adminNationalId().strip()
+                : bootstrap.adminEmail();
+        return memberships.findByTenantIdAndPersonNationalId(tenant.getId(), login)
+                .or(() -> memberships.findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), login))
+                .orElseThrow(() -> new IllegalStateException("Bootstrap admin membership was not found for demo data seed"));
+    }
+
+    private void grantRoleByNationalId(Tenant tenant, String nationalId, String roleCode) {
+        TenantMembership membership = memberships.findByTenantIdAndPersonNationalId(tenant.getId(), nationalId).orElse(null);
         if (membership == null) return;
         AccessRole role = roles.findAllByTenantIdOrderByName(tenant.getId()).stream()
                 .filter(item -> roleCode.equalsIgnoreCase(item.getCode()))

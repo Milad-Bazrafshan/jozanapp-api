@@ -29,6 +29,7 @@ import ir.orix.school.organization.domain.TenantMembership;
 import ir.orix.school.organization.persistence.AccessGrantRepository;
 import ir.orix.school.organization.persistence.TenantMembershipRepository;
 import ir.orix.school.organization.persistence.TenantRepository;
+import ir.orix.school.kyc.ZohalThirdService;
 import ir.orix.school.shared.security.JwtService;
 import ir.orix.school.shared.security.SecurityProperties;
 import ir.orix.school.shared.security.TokenHashService;
@@ -77,14 +78,11 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginOutcome login(String tenantSlug, String email, String password) {
+    public LoginOutcome login(String tenantSlug, String login, String password) {
         Tenant tenant = tenantRepository.findBySlugIgnoreCase(tenantSlug.strip())
                 .filter(value -> value.getStatus() == Tenant.Status.ACTIVE)
                 .orElseThrow(AuthService::invalidCredentials);
-        TenantMembership membership = membershipRepository
-                .findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), email.strip())
-                .filter(value -> value.getStatus() == TenantMembership.Status.ACTIVE)
-                .orElseThrow(AuthService::invalidCredentials);
+        TenantMembership membership = resolveActiveMembership(tenant.getId(), login);
         UserAccount account = membership.getUserAccount();
         if (account.getStatus() != UserAccount.Status.ACTIVE || !passwordEncoder.matches(password, account.getPasswordHash())) {
             throw invalidCredentials();
@@ -102,14 +100,11 @@ public class AuthService {
     }
 
     @Transactional
-    public IssuedCredentials completeLoginWithSms(String tenantSlug, String email, Long challengeId, String code) {
+    public IssuedCredentials completeLoginWithSms(String tenantSlug, String login, Long challengeId, String code) {
         Tenant tenant = tenantRepository.findBySlugIgnoreCase(tenantSlug.strip())
                 .filter(value -> value.getStatus() == Tenant.Status.ACTIVE)
                 .orElseThrow(AuthService::invalidCredentials);
-        TenantMembership membership = membershipRepository
-                .findByTenantIdAndUserAccountEmailIgnoreCase(tenant.getId(), email.strip())
-                .filter(value -> value.getStatus() == TenantMembership.Status.ACTIVE)
-                .orElseThrow(AuthService::invalidCredentials);
+        TenantMembership membership = resolveActiveMembership(tenant.getId(), login);
         UserAccount account = membership.getUserAccount();
         if (!account.isTwoFactorSmsEnabled()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "2FA_NOT_ENABLED", "Two-factor SMS is not enabled for this account.");
@@ -240,8 +235,27 @@ public class AuthService {
         return new IssuedCredentials(session.accessToken(), session.refreshToken(), body);
     }
 
+    private TenantMembership resolveActiveMembership(Long tenantId, String login) {
+        String trimmed = login == null ? "" : login.strip();
+        if (trimmed.isBlank()) {
+            throw invalidCredentials();
+        }
+        Optional<TenantMembership> byNational = Optional.empty();
+        try {
+            String nationalId = ZohalThirdService.normalizeNationalCode(trimmed);
+            byNational = membershipRepository.findByTenantIdAndPersonNationalId(tenantId, nationalId);
+        } catch (ApiException ignored) {
+            // not a national code; fall back to login identifier on account
+        }
+        TenantMembership membership = byNational
+                .or(() -> membershipRepository.findByTenantIdAndUserAccountEmailIgnoreCase(tenantId, trimmed))
+                .filter(value -> value.getStatus() == TenantMembership.Status.ACTIVE)
+                .orElseThrow(AuthService::invalidCredentials);
+        return membership;
+    }
+
     private static ApiException invalidCredentials() {
-        return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Tenant, email, or password is incorrect.");
+        return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Tenant, national ID, or password is incorrect.");
     }
 
     public record GrantView(Long roleId, String roleCode, String roleName, String scopeType, Long scopeId) {}

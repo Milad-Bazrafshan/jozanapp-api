@@ -1,6 +1,7 @@
 package ir.orix.school.identity.api;
 
 import java.util.Optional;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -41,7 +42,7 @@ public class AuthController {
 
     @PostMapping("/login")
     LoginApiResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        AuthService.LoginOutcome outcome = authService.login(request.tenantSlug(), request.email(), request.password());
+        AuthService.LoginOutcome outcome = authService.login(request.tenantSlug(), request.login(), request.password());
         if (outcome instanceof AuthService.LoginOutcome.Success success) {
             writeCookies(response, success.credentials());
             return new LoginApiResponse(success.credentials().body(), null);
@@ -52,7 +53,7 @@ public class AuthController {
 
     @PostMapping("/login/2fa")
     AuthService.AuthSessionResponse login2fa(@Valid @RequestBody Login2faRequest request, HttpServletResponse response) {
-        AuthService.IssuedCredentials issued = authService.completeLoginWithSms(request.tenantSlug(), request.email(),
+        AuthService.IssuedCredentials issued = authService.completeLoginWithSms(request.tenantSlug(), request.login(),
                 request.challengeId(), request.code());
         writeCookies(response, issued);
         return issued.body();
@@ -108,9 +109,13 @@ public class AuthController {
         return cookieService.readRefreshToken(httpRequest);
     }
 
-    public record LoginRequest(@NotBlank String tenantSlug, @NotBlank @Email String email, @NotBlank String password) {}
+    public record LoginRequest(@NotBlank String tenantSlug,
+                               @NotBlank @JsonAlias("email") String login,
+                               @NotBlank String password) {}
 
-    public record Login2faRequest(@NotBlank String tenantSlug, @NotBlank @Email String email, @NotNull Long challengeId,
+    public record Login2faRequest(@NotBlank String tenantSlug,
+                                  @NotBlank @JsonAlias("email") String login,
+                                  @NotNull Long challengeId,
                                   @NotBlank @Size(min = 4, max = 10) String code) {}
 
     public record LoginApiResponse(AuthService.AuthSessionResponse session, AuthService.PendingSmsResponse pendingSms) {}

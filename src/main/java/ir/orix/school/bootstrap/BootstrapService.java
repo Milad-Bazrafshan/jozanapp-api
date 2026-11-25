@@ -71,10 +71,17 @@ public class BootstrapService {
         EducationalInstitution institution = institutionRepository.save(new EducationalInstitution(
             tenant, properties.tenantName(), EducationalInstitution.Type.GENERAL));
         branchRepository.save(new Branch(tenant, institution, "MAIN", "شعبه اصلی", null, null));
-        UserAccount account = accountRepository.findByEmailIgnoreCase(properties.adminEmail())
-            .orElseGet(() -> accountRepository.save(new UserAccount(properties.adminEmail(),
+        String adminLogin = properties.adminNationalId() != null && !properties.adminNationalId().isBlank()
+                ? properties.adminNationalId().strip()
+                : properties.adminEmail() == null ? "" : properties.adminEmail().strip();
+        if (adminLogin.isBlank()) {
+            throw new IllegalStateException("BOOTSTRAP_ADMIN_NATIONAL_ID or BOOTSTRAP_ADMIN_EMAIL is required.");
+        }
+        UserAccount account = accountRepository.findByEmailIgnoreCase(adminLogin)
+            .orElseGet(() -> accountRepository.save(new UserAccount(adminLogin,
                 passwordEncoder.encode(properties.adminPassword()), clock.instant())));
-        Person person = personRepository.save(new Person(tenant, properties.adminFirstName(), properties.adminLastName(), null, null));
+        Person person = personRepository.save(new Person(tenant, properties.adminFirstName(), properties.adminLastName(),
+                adminLogin, null));
         TenantMembership membership = membershipRepository.save(new TenantMembership(tenant, account, person, clock.instant()));
         AccessRole role = new AccessRole(tenant, "ADMIN", "مدیر سیستم", "دسترسی کامل به مدیریت آموزشگاه", true);
         role.replacePermissions(new LinkedHashSet<>(permissionRepository.findAll()));

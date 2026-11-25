@@ -79,8 +79,8 @@ public class AttendanceService {
         ensureAccess(tenantId, membershipId, session, "ATTENDANCE_WRITE");
         if (Set.of(ClassSession.Status.CANCELLED, ClassSession.Status.POSTPONED, ClassSession.Status.RESCHEDULED).contains(session.getStatus()))
             throw conflict("SESSION_NOT_ATTENDABLE", "Attendance cannot be recorded for this session.");
-        if (session.getSessionDate().isAfter(LocalDate.now(clock)))
-            throw conflict("FUTURE_SESSION_ATTENDANCE", "Attendance cannot be recorded before the session date.");
+        /*if (session.getSessionDate().isAfter(LocalDate.now(clock)))
+            throw conflict("FUTURE_SESSION_ATTENDANCE", "Attendance cannot be recorded before the session date.");*/
         List<Enrollment> roster = eligibleEnrollments(tenantId, session);
         Map<Long, Enrollment> eligible = roster.stream().collect(Collectors.toMap(e -> e.getStudent().getId(), e -> e));
         if (command.records().stream().map(RecordCommand::studentId).distinct().count() != command.records().size())
